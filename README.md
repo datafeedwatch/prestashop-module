@@ -1,3 +1,6 @@
+# Installing PrestaShop Module at DataFeedWatch - user giude
+https://help.datafeedwatch.com/article/irsiaf8mxa-presta
+
 # DataFeedWatch Module
 **Basic rest:**
 ```
