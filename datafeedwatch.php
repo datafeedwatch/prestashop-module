@@ -35,7 +35,7 @@ class DataFeedWatch extends Module
     {
         $this->name = 'datafeedwatch';
         $this->tab = 'market_place';
-        $this->version = '1.1.0';
+        $this->version = '1.1.1';
         $this->author = 'PrestaPros.com';
         $this->need_instance = 0;
         $this->languages = Language::getLanguages(false);
@@ -412,7 +412,17 @@ class DataFeedWatch extends Module
         }
 
         foreach ($result as $item) {
-            $productData = $this->prepareStandardProductData($item, Currency::getDefaultCurrency(), $shopId);
+            $quantity = Product::getRealQuantity((int)$item['id_product'], 0, 0, $shopId);
+            if (Configuration::get(self::CONFIG_ONLY_STOCK, null, null, $shopId) && 0 >= $quantity) {
+                continue;
+            }
+            $deliveryData = $this->prepareProductDeliveryData($item['id_product'], $shopId, $quantity);
+            $productData = $this->prepareStandardProductData($item, Currency::getDefaultCurrency());
+            $productData['quantity'] = $quantity;
+            $productData['availability'] = $quantity > 0 ? 'in stock' : 'out of stock';
+            $productData['deliveryDate'] = $deliveryData['deliveryTime'];
+            $productData['additionalDeliveryTimes'] = $deliveryData['additionalDeliveryTimes'];
+
             $this->prepareProductCategoryDate($productData, $shopId, $item['id_product'], $langId);
             if (isset($params['with_attributes'])
                 && $params['with_attributes']
@@ -580,11 +590,8 @@ class DataFeedWatch extends Module
         }
     }
 
-    protected function prepareStandardProductData($item, $currency, $shopId)
+    protected function prepareStandardProductData($item, $currency)
     {
-        $quantity = Product::getRealQuantity((int)$item['id_product'], 0, 0, $shopId);
-        $deliveryData = $this->prepareProductDeliveryData($item['id_product'], $shopId, $quantity);
-
         $productData = array();
         $productData['id'] = (int)$item['id_product'];
         $productData['title'] = $item['name'];
@@ -604,13 +611,10 @@ class DataFeedWatch extends Module
         $productData['shipping_height'] = Tools::ps_round($item['height'], 2) . self::LENGTH_NAME;
         $productData['shipping_width'] = Tools::ps_round($item['width'], 2) . self::LENGTH_NAME;
         $productData['shipping_depth'] = Tools::ps_round($item['depth'], 2) . self::LENGTH_NAME;
-        $productData['quantity'] = $quantity;
-        $productData['availability'] = $quantity > 0 ? 'in stock' : 'out of stock';
         $productData['currency'] = $currency->iso_code;
         $productData['tax_rate'] = $item['rate'];
         $productData['meta_title'] = $item['meta_title'];
         $productData['meta_description'] = $item['meta_description'];
-        $productData['deliveryDate'] = $deliveryData['deliveryTime'];
         $productData['onSale'] = (int)$item['on_sale'] === 0 ? 'n' : 'y';
         $productData['ecotax'] = Tools::ps_round($item['ecotax'], 2);
         $productData['minimalQuantity'] = (int)$item['minimal_quantity'];
@@ -624,7 +628,6 @@ class DataFeedWatch extends Module
         $productData['supplierReference'] = $item['supplier_reference'];
         $productData['location'] = $item['location'];
         $productData['outOfStock'] = (int)Product::isAvailableWhenOutOfStock($item['out_of_stock']) === 1;
-        $productData['additionalDeliveryTimes'] = $deliveryData['additionalDeliveryTimes'];
         $productData['quantityDiscount'] = (int)$item['quantity_discount'] === 1;
         $productData['customizable'] = (int)$item['customizable'] === 1;
         $productData['uploadableFiles'] = (int)$item['uploadable_files'] === 0 ? 'n' : 'y';
@@ -877,9 +880,7 @@ class DataFeedWatch extends Module
         if (Configuration::get(self::CONFIG_ONLY_ACTIVE, null, null, $shopId)) {
             $dbquery->where('p.`active` = 1');
         }
-        if (Configuration::get(self::CONFIG_ONLY_STOCK, null, null, $shopId)) {
-            $dbquery->where('stock.quantity > 0');
-        }
+
         $dbquery->limit((int)$params['limit'], (int)$params['offset']);
         $dbquery->groupBy('p.id_product');
 
